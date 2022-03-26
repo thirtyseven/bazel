@@ -990,4 +990,37 @@ BRH:5"
   assert_coverage_result "$expected_result" "$coverage_file_path"
 }
 
+function test_jacoco_guava_conflict() {
+  # Verify branches in finally blocks are handled correctly.
+  # The java compiler duplicates finally blocks for the various code paths that
+  # may enter them (e.g. via an exception handler or when no exception is
+  # thrown).
+  cat <<EOF > BUILD
+java_test(
+    name = "test",
+    srcs = glob(["src/test/**/*.java"]),
+    test_class = "com.example.TestGuava",
+    deps = ["//third_party:guava"],
+)
+EOF
+
+  mkdir -p src/main/com/example
+  cat <<EOF > src/main/com/example/TestGuava.java
+package com.example;
+
+public class TestGuava {
+  @org.junit.Test
+  public void test() {
+    InternetDomainName.from("example.com");
+  }
+}
+EOF
+
+  # Expectation is that both commands succeed
+  bazel test //:test
+  bazel coverage --test_output=all //:test \
+    --coverage_report_generator=@bazel_tools//tools/test:coverage_report_generator \
+    --combined_report=lcov &>$TEST_log
+}
+
 run_suite "test tests"
